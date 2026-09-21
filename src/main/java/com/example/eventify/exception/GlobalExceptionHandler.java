@@ -10,10 +10,21 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler({InvalidEventException.class, InvalidVenueException.class})
-    public ResponseEntity<Map<String, String>> manejarDatosInvalidos(RuntimeException exception) {
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNotFound(
+            ResourceNotFoundException exception) {
+
         return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("mensaje", exception.getMessage()));
+                .status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", exception.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleBadRequest(
+            IllegalArgumentException exception) {
+
+        return ResponseEntity
+                .badRequest()
+                .body(Map.of("error", exception.getMessage()));
     }
 }

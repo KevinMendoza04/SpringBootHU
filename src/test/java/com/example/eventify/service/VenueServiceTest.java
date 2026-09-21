@@ -1,6 +1,5 @@
 package com.example.eventify.service;
 
-import com.example.eventify.exception.InvalidVenueException;
 import com.example.eventify.model.Venue;
 import com.example.eventify.repository.VenueRepository;
 import org.junit.jupiter.api.Test;
@@ -29,19 +28,19 @@ class VenueServiceTest {
         Venue venue = new Venue(null, "Teatro Central", "Calle 10", 800);
         Venue venueGuardado = new Venue(1L, "Teatro Central", "Calle 10", 800);
 
-        when(venueRepository.guardar(venue)).thenReturn(venueGuardado);
+        when(venueRepository.save(venue)).thenReturn(venueGuardado);
 
         Venue resultado = venueService.crear(venue);
 
         assertEquals(1L, resultado.getId());
-        verify(venueRepository).guardar(venue);
+        verify(venueRepository).save(venue);
     }
 
     @Test
     void deberiaRechazarLugarConCapacidadInvalida() {
         Venue venue = new Venue(null, "Teatro Central", "Calle 10", 0);
 
-        assertThrows(InvalidVenueException.class, () -> venueService.crear(venue));
+        assertThrows(IllegalArgumentException.class, () -> venueService.crear(venue));
 
         verifyNoInteractions(venueRepository);
     }

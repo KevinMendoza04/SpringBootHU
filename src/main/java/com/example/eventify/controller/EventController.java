@@ -2,19 +2,13 @@ package com.example.eventify.controller;
 
 import com.example.eventify.model.Event;
 import com.example.eventify.service.EventService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.net.URI;
 
-@Tag(name = "Eventos", description = "Operaciones para consultar y registrar eventos")
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
@@ -25,16 +19,39 @@ public class EventController {
         this.eventService = eventService;
     }
 
-    @GetMapping
-    @Operation(summary = "Listar eventos")
-    public List<Event> listar() {
-        return eventService.listar();
+    @PostMapping
+    public ResponseEntity<Event> crear(@RequestBody Event event) {
+
+        Event creado = eventService.crear(event);
+
+        return ResponseEntity
+                .created(URI.create("/api/events/" + creado.getId()))
+                .body(creado);
     }
 
-    @PostMapping
-    @Operation(summary = "Crear evento")
-    public ResponseEntity<Event> crear(@RequestBody Event event) {
-        Event eventoCreado = eventService.crear(event);
-        return ResponseEntity.status(HttpStatus.CREATED).body(eventoCreado);
+    @GetMapping
+    public ResponseEntity<Page<Event>> listar(Pageable pageable) {
+        return ResponseEntity.ok(eventService.listar(pageable));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Event> buscarPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.buscarPorId(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Event> actualizar(
+            @PathVariable Long id,
+            @RequestBody Event event) {
+
+        return ResponseEntity.ok(eventService.actualizar(id, event));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
+
+        eventService.eliminar(id);
+
+        return ResponseEntity.noContent().build();
     }
 }

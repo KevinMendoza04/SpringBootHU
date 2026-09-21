@@ -1,27 +1,12 @@
 package com.example.eventify.repository;
 
 import com.example.eventify.model.Venue;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.ArrayList;
 import java.util.List;
 
-@Repository
-public class VenueRepository {
+public interface VenueRepository extends JpaRepository<Venue, Long> {
 
-    private final List<Venue> venues = new ArrayList<>();
-    private Long siguienteId = 1L;
+    List<Venue> findByNombreContaining(String nombre);
 
-    public List<Venue> listar() {
-        return new ArrayList<>(venues);
-    }
-
-    public Venue guardar(Venue venue) {
-        if (venue.getId() == null) {
-            venue.setId(siguienteId++);
-        }
-
-        venues.add(venue);
-        return venue;
-    }
 }

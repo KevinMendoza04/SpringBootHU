@@ -1,6 +1,5 @@
 package com.example.eventify.service;
 
-import com.example.eventify.exception.InvalidEventException;
 import com.example.eventify.model.Event;
 import com.example.eventify.repository.EventRepository;
 import org.junit.jupiter.api.Test;
@@ -31,19 +30,19 @@ class EventServiceTest {
         Event evento = new Event(null, "Concierto", LocalDate.of(2026, 10, 20), "Música");
         Event eventoGuardado = new Event(1L, "Concierto", LocalDate.of(2026, 10, 20), "Música");
 
-        when(eventRepository.guardar(evento)).thenReturn(eventoGuardado);
+        when(eventRepository.save(evento)).thenReturn(eventoGuardado);
 
         Event resultado = eventService.crear(evento);
 
         assertEquals(1L, resultado.getId());
-        verify(eventRepository).guardar(evento);
+        verify(eventRepository).save(evento);
     }
 
     @Test
     void deberiaRechazarEventoSinNombre() {
         Event evento = new Event(null, "   ", LocalDate.of(2026, 10, 20), "Música");
 
-        assertThrows(InvalidEventException.class, () -> eventService.crear(evento));
+        assertThrows(IllegalArgumentException.class, () -> eventService.crear(evento));
 
         verifyNoInteractions(eventRepository);
     }
