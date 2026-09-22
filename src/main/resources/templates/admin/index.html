@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Panel Administrativo')}"></head>
+<body>
+
+<header th:replace="~{fragments/layout :: navbar}"></header>
+
+<main>
+
+    <!-- ===== EVENTOS ===== -->
+    <div class="card">
+        <h2>Eventos</h2>
+
+        <th:block th:if="${#lists.isEmpty(eventos)}">
+            <p class="empty-msg">Actualmente no hay eventos programados.</p>
+        </th:block>
+
+        <th:block th:unless="${#lists.isEmpty(eventos)}">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Nombre</th>
+                        <th>Fecha</th>
+                        <th>Descripción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="evento : ${eventos}">
+                        <td th:text="${evento.id}">1</td>
+                        <td th:text="${evento.nombre}">Nombre</td>
+                        <td th:text="${evento.fecha}">2026-01-01</td>
+                        <td th:text="${evento.descripcion}">Descripción</td>
+                    </tr>
+                </tbody>
+            </table>
+        </th:block>
+
+        <div class="actions" style="margin-top:1rem;">
+            <a th:href="@{/admin/eventos/nuevo}" class="btn btn-primary">+ Nuevo evento</a>
+        </div>
+    </div>
+
+    <!-- ===== LUGARES ===== -->
+    <div class="card">
+        <h2>Lugares</h2>
+
+        <th:block th:if="${#lists.isEmpty(lugares)}">
+            <p class="empty-msg">Actualmente no hay lugares registrados.</p>
+        </th:block>
+
+        <th:block th:unless="${#lists.isEmpty(lugares)}">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Nombre</th>
+                        <th>Dirección</th>
+                        <th>Capacidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="lugar : ${lugares}">
+                        <td th:text="${lugar.id}">1</td>
+                        <td th:text="${lugar.nombre}">Nombre</td>
+                        <td th:text="${lugar.direccion}">Dirección</td>
+                        <td th:text="${lugar.capacidad}">0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </th:block>
+
+        <div class="actions" style="margin-top:1rem;">
+            <a th:href="@{/admin/lugares/nuevo}" class="btn btn-primary">+ Nuevo lugar</a>
+        </div>
+    </div>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>
