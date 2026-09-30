@@ -7,12 +7,36 @@
 
 <main>
 
+    <!-- ===== SEARCH & FILTERS ===== -->
+    <div class="card">
+        <h3 style="margin-bottom: 1rem; color: #3f51b5;">🔍 Buscar y Filtrar Eventos</h3>
+        
+        <form th:action="@{/admin/buscar}" method="get" style="display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: flex-end;">
+            <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                <label for="ciudad">Ciudad</label>
+                <input type="text" id="ciudad" name="ciudad" th:value="${ciudad}" placeholder="Ej. Bogotá" />
+            </div>
+            
+            <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                <label for="categoria">Categoría</label>
+                <input type="text" id="categoria" name="categoria" th:value="${categoria}" placeholder="Ej. Conciertos" />
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Buscar</button>
+            <a th:href="@{/admin/}" class="btn btn-secondary">Limpiar filtros</a>
+        </form>
+    </div>
+
     <!-- ===== EVENTOS ===== -->
     <div class="card">
-        <h2>Eventos</h2>
+        <h2>Eventos 
+            <span th:if="${filtro}" style="font-size: 0.85rem; color: #666;">
+                (Filtrado por: <span th:text="${filtro}"></span>)
+            </span>
+        </h2>
 
         <th:block th:if="${#lists.isEmpty(eventos)}">
-            <p class="empty-msg">Actualmente no hay eventos programados.</p>
+            <p class="empty-msg">No hay eventos que coincidan con los criterios de búsqueda.</p>
         </th:block>
 
         <th:block th:unless="${#lists.isEmpty(eventos)}">
@@ -22,18 +46,47 @@
                         <th>#</th>
                         <th>Nombre</th>
                         <th>Fecha</th>
+                        <th>Lugar</th>
+                        <th>Ciudad</th>
                         <th>Descripción</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr th:each="evento : ${eventos}">
                         <td th:text="${evento.id}">1</td>
                         <td th:text="${evento.nombre}">Nombre</td>
-                        <td th:text="${evento.fecha}">2026-01-01</td>
-                        <td th:text="${evento.descripcion}">Descripción</td>
+                        <td th:text="${#temporals.format(evento.fecha, 'dd/MM/yyyy')}">2026-01-01</td>
+                        <td th:text="${evento.venue?.nombre}">Lugar</td>
+                        <td th:text="${evento.venue?.ciudad}">Ciudad</td>
+                        <td th:text="${#strings.abbreviate(evento.descripcion, 40)}">Descripción</td>
+                        <td>
+                            <form th:action="@{/admin/eventos/{id}/eliminar(id=${evento.id})}" method="post" style="display: inline;">
+                                <button type="submit" class="btn btn-secondary" onclick="return confirm('¿Eliminar este evento?');" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Eliminar</button>
+                            </form>
+                        </td>
                     </tr>
                 </tbody>
             </table>
+            
+            <!-- Pagination Navigation -->
+            <div style="display: flex; gap: 1rem; margin-top: 1rem; justify-content: center; align-items: center;">
+                <a th:if="${hasPrevious}" 
+                   th:href="@{/admin/buscar(page=${currentPage - 1}, ciudad=${ciudad}, categoria=${categoria})}"
+                   class="btn btn-primary">← Anterior</a>
+                
+                <span th:unless="${hasPrevious}" class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">← Anterior</span>
+                
+                <span style="padding: 0 1rem; font-weight: 600; color: #3f51b5;">
+                    Página <span th:text="${currentPage + 1}"></span>
+                </span>
+                
+                <a th:if="${hasNext}" 
+                   th:href="@{/admin/buscar(page=${currentPage + 1}, ciudad=${ciudad}, categoria=${categoria})}"
+                   class="btn btn-primary">Siguiente →</a>
+                
+                <span th:unless="${hasNext}" class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">Siguiente →</span>
+            </div>
         </th:block>
 
         <div class="actions" style="margin-top:1rem;">
@@ -55,6 +108,7 @@
                     <tr>
                         <th>#</th>
                         <th>Nombre</th>
+                        <th>Ciudad</th>
                         <th>Dirección</th>
                         <th>Capacidad</th>
                     </tr>
@@ -63,6 +117,7 @@
                     <tr th:each="lugar : ${lugares}">
                         <td th:text="${lugar.id}">1</td>
                         <td th:text="${lugar.nombre}">Nombre</td>
+                        <td th:text="${lugar.ciudad}">Ciudad</td>
                         <td th:text="${lugar.direccion}">Dirección</td>
                         <td th:text="${lugar.capacidad}">0</td>
                     </tr>
@@ -72,6 +127,38 @@
 
         <div class="actions" style="margin-top:1rem;">
             <a th:href="@{/admin/lugares/nuevo}" class="btn btn-primary">+ Nuevo lugar</a>
+        </div>
+    </div>
+
+    <!-- ===== CATEGORÍAS ===== -->
+    <div class="card">
+        <h2>Categorías</h2>
+
+        <th:block th:if="${#lists.isEmpty(categorias)}">
+            <p class="empty-msg">Actualmente no hay categorías registradas.</p>
+        </th:block>
+
+        <th:block th:unless="${#lists.isEmpty(categorias)}">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="categoria : ${categorias}">
+                        <td th:text="${categoria.id}">1</td>
+                        <td th:text="${categoria.nombre}">Nombre</td>
+                        <td th:text="${categoria.descripcion}">Descripción</td>
+                    </tr>
+                </tbody>
+            </table>
+        </th:block>
+
+        <div class="actions" style="margin-top:1rem;">
+            <a th:href="@{/admin/categorias/nuevo}" class="btn btn-primary">+ Nueva categoría</a>
         </div>
     </div>
 
