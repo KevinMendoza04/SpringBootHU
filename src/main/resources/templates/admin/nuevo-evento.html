@@ -6,7 +6,7 @@
 <header th:replace="~{fragments/layout :: navbar}"></header>
 
 <main>
-    <div class="card" style="max-width: 560px;">
+    <div class="card" style="max-width: 600px;">
         <h2>Registrar nuevo evento</h2>
 
         <form th:action="@{/admin/eventos}" th:object="${evento}" method="post">
@@ -27,8 +27,42 @@
                           placeholder="Breve descripción del evento" required></textarea>
             </div>
 
+            <div class="form-group">
+                <label for="venue">Lugar (Venue) *</label>
+                <select id="venue" name="venue.id" required style="width: 100%; padding: 0.5rem 0.7rem; border: 1px solid #c5cae9; border-radius: 5px; font-size: 0.92rem;">
+                    <option value="">-- Seleccionar un lugar --</option>
+                    <option th:each="lugar : ${lugares}" 
+                            th:value="${lugar.id}"
+                            th:text="${lugar.nombre} + ' (' + ${lugar.ciudad} + ')' + ' - Cap: ' + ${lugar.capacidad}">
+                        Lugar - Cap: 0
+                    </option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Categorías</label>
+                <div style="border: 1px solid #c5cae9; border-radius: 5px; padding: 0.8rem; background: #f9fafb;">
+                    <div th:if="${#lists.isEmpty(categorias)}" style="color: #888; font-style: italic;">
+                        No hay categorías disponibles. Crea una nueva.
+                    </div>
+                    
+                    <div th:each="categoria : ${categorias}" style="margin-bottom: 0.6rem; display: flex; align-items: center;">
+                        <input type="checkbox" 
+                               th:id="${'cat_' + categoria.id}" 
+                               name="categoriaIds"
+                               th:value="${categoria.id}"
+                               style="margin-right: 0.5rem; cursor: pointer;"/>
+                        <label th:for="${'cat_' + categoria.id}" 
+                               style="margin: 0; cursor: pointer; font-weight: normal; display: flex; align-items: center; gap: 0.3rem;">
+                            <span th:text="${categoria.nombre}">Categoría</span>
+                            <span style="font-size: 0.85rem; color: #888;">(<span th:text="${categoria.descripcion}">Descripción</span>)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <div class="actions">
-                <button type="submit" class="btn btn-primary">Guardar</button>
+                <button type="submit" class="btn btn-primary">Guardar Evento</button>
                 <a th:href="@{/admin/}" class="btn btn-secondary">Cancelar</a>
             </div>
         </form>
