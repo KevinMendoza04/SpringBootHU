@@ -1,12 +1,17 @@
 package com.example.eventify.service;
 
+import com.example.eventify.dto.EventCreateDTO;
+import com.example.eventify.dto.EventResponseDTO;
 import com.example.eventify.dto.EventSummaryDTO;
-import com.example.eventify.exception.InvalidEventException;
-import com.example.eventify.model.Event;
+import com.example.eventify.exception.BusinessRuleViolationException;
+import com.example.eventify.exception.ResourceNotFoundException;
+import com.example.eventify.mapper.EventMapper;
 import com.example.eventify.model.Category;
+import com.example.eventify.model.Event;
 import com.example.eventify.model.Venue;
-import com.example.eventify.repository.EventRepository;
 import com.example.eventify.repository.CategoryRepository;
+import com.example.eventify.repository.EventRepository;
+import com.example.eventify.repository.VenueRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
@@ -17,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * EventService - Orchestrates business logic for event management with optimized data access patterns.
@@ -25,21 +31,30 @@ import java.util.Set;
  * - Event creation with mandatory Venue assignment and Category linking
  * - Soft delete mechanism with logical deletion and restoration
  * - Performance-optimized query methods using EventSummaryDTO projections and Slice pagination
+ * - DTO-based API: accepts EventCreateDTO, returns EventResponseDTO
  * - N+1 query resolution through @EntityGraph and JPQL constructor expressions
  * - Comprehensive logging for audit trail and observability
  */
 @Service
 @Transactional
 public class EventService {
-
     private static final Logger logger = LoggerFactory.getLogger(EventService.class);
-
+    
     private final EventRepository eventRepository;
+    private final VenueRepository venueRepository;
     private final CategoryRepository categoryRepository;
+    private final EventMapper eventMapper;
 
-    public EventService(EventRepository eventRepository, CategoryRepository categoryRepository) {
+    public EventService(
+            EventRepository eventRepository,
+            VenueRepository venueRepository,
+            CategoryRepository categoryRepository,
+            EventMapper eventMapper
+    ) {
         this.eventRepository = eventRepository;
+        this.venueRepository = venueRepository;
         this.categoryRepository = categoryRepository;
+        this.eventMapper = eventMapper;
     }
 
     /**
@@ -57,6 +72,7 @@ public class EventService {
     /**
      * Retrieve event summaries (denormalized DTOs) for massive catalog display.
      * Optimized for UI presentation without loading full entity graphs.
+     * KEEPS the Record EventSummaryDTO strategy from week 4 for list optimization.
      * 
      * @param pageable Pagination parameters (Slice-based)
      * @return Slice of EventSummaryDTO projections
@@ -105,49 +121,63 @@ public class EventService {
     }
 
     /**
-     * Create a new event with mandatory venue and optional categories.
-     * Validates all business rules before persistence.
+     * Create a new event from EventCreateDTO with mandatory venue and optional categories.
+     * Validates all business rules before persistence and returns EventResponseDTO.
      * 
-     * @param event Event entity with venue (required) and categories (optional)
-     * @return Persisted Event with assigned ID
-     * @throws InvalidEventException if validation fails
+     * @param eventCreateDTO DTO with event creation data
+     * @return EventResponseDTO with created event details
+     * @throws ResourceNotFoundException if venue not found
+     * @throws BusinessRuleViolationException if validation fails
      */
-    public Event crear(Event event) {
-        logger.info("Creating new event: {}", event.getNombre());
+    public EventResponseDTO crear(EventCreateDTO eventCreateDTO) {
+        logger.info("Creating new event: {}", eventCreateDTO.getNombre());
 
-        if (event == null || event.getNombre() == null || event.getNombre().isBlank()) {
-            throw new InvalidEventException("El nombre del evento es obligatorio");
-        }
-
-        if (event.getFecha() == null) {
-            throw new InvalidEventException("La fecha del evento es obligatoria");
-        }
-
-        if (event.getDescripcion() == null || event.getDescripcion().isBlank()) {
-            throw new InvalidEventException("La descripción del evento es obligatoria");
-        }
-
-        if (event.getVenue() == null || event.getVenue().getId() == null) {
-            throw new InvalidEventException("El lugar (venue) es obligatorio para crear un evento");
-        }
-
+        // Convert DTO to entity
+        Event event = eventMapper.toEntity(eventCreateDTO);
         event.setIsActive(true);
+
+        // Load and validate venue
+        if (eventCreateDTO.getVenueId() == null || eventCreateDTO.getVenueId() <= 0) {
+            throw new BusinessRuleViolationException(
+                "El lugar (venue) es obligatorio para crear un evento",
+                "VENUE_REQUIRED"
+            );
+        }
+
+        Venue venue = venueRepository.findById(eventCreateDTO.getVenueId())
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Venue",
+                "id",
+                eventCreateDTO.getVenueId()
+            ));
+
+        event.setVenue(venue);
+
+        // Load and assign categories if provided
+        if (eventCreateDTO.getCategoryIds() != null && !eventCreateDTO.getCategoryIds().isEmpty()) {
+            Set<Category> categories = eventCreateDTO.getCategoryIds().stream()
+                .map(categoryId -> categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId)))
+                .collect(Collectors.toSet());
+            event.setCategories(categories);
+        }
 
         Event savedEvent = eventRepository.save(event);
         logger.info("Event created successfully with ID: {}", savedEvent.getId());
 
-        return savedEvent;
+        return eventMapper.toResponseDTO(savedEvent);
     }
 
     /**
-     * Find event by ID with full entity graph loaded.
+     * Find event by ID and return EventResponseDTO.
      * 
      * @param id Event ID
-     * @return Optional containing the Event if found
+     * @return Optional containing EventResponseDTO if found
      */
-    public Optional<Event> obtenerPorId(Long id) {
+    public Optional<EventResponseDTO> obtenerPorId(Long id) {
         logger.debug("Fetching event by ID: {}", id);
-        return eventRepository.findById(id);
+        return eventRepository.findById(id)
+            .map(eventMapper::toResponseDTO);
     }
 
     /**
@@ -156,17 +186,14 @@ public class EventService {
      * Automatically filtered from all queries via @SQLRestriction.
      * 
      * @param id Event ID to soft delete
-     * @throws InvalidEventException if event not found
+     * @throws ResourceNotFoundException if event not found
      */
     public void softDeletear(Long id) {
         logger.info("Soft deleting event with ID: {}", id);
-
         Event event = eventRepository.findById(id)
-            .orElseThrow(() -> new InvalidEventException("Evento no encontrado con ID: " + id));
-
+            .orElseThrow(() -> new ResourceNotFoundException("Evento", "id", id));
         event.softDelete();
         eventRepository.save(event);
-
         logger.info("Event soft deleted successfully: {}", id);
     }
 
@@ -174,34 +201,29 @@ public class EventService {
      * Restore a soft-deleted event back to active status.
      * 
      * @param id Event ID to restore
-     * @throws InvalidEventException if event not found
+     * @throws ResourceNotFoundException if event not found
      */
     public void restaurar(Long id) {
         logger.info("Restoring soft-deleted event with ID: {}", id);
-
         Event event = eventRepository.findById(id)
-            .orElseThrow(() -> new InvalidEventException("Evento no encontrado con ID: " + id));
-
+            .orElseThrow(() -> new ResourceNotFoundException("Evento", "id", id));
         event.restore();
         eventRepository.save(event);
-
         logger.info("Event restored successfully: {}", id);
     }
 
     /**
-     * Add a category to an event (update many-to-many relationship).
-     * Categories are created or fetched by name, then linked to event.
+     * Add categories to an event (update many-to-many relationship).
      * 
      * @param eventId Event ID
      * @param categoryNames Set of category names to associate
-     * @throws InvalidEventException if event not found
+     * @throws ResourceNotFoundException if event not found
      */
     public void agregarCategorias(Long eventId, Set<String> categoryNames) {
         logger.debug("Adding categories to event {}: {}", eventId, categoryNames);
-
         Event event = eventRepository.findById(eventId)
-            .orElseThrow(() -> new InvalidEventException("Evento no encontrado con ID: " + eventId));
-
+            .orElseThrow(() -> new ResourceNotFoundException("Evento", "id", eventId));
+        
         for (String categoryName : categoryNames) {
             Category category = categoryRepository.findByNombreIgnoreCase(categoryName)
                 .orElseGet(() -> {
@@ -209,10 +231,8 @@ public class EventService {
                     newCategory.setNombre(categoryName);
                     return categoryRepository.save(newCategory);
                 });
-
             event.getCategories().add(category);
         }
-
         eventRepository.save(event);
         logger.debug("Categories added successfully to event: {}", eventId);
     }

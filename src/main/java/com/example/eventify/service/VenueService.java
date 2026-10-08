@@ -1,6 +1,11 @@
 package com.example.eventify.service;
 
-import com.example.eventify.exception.InvalidVenueException;
+import com.example.eventify.dto.VenueCreateDTO;
+import com.example.eventify.dto.VenueResponseDTO;
+import com.example.eventify.exception.BusinessRuleViolationException;
+import com.example.eventify.exception.DuplicateResourceException;
+import com.example.eventify.exception.ResourceNotFoundException;
+import com.example.eventify.mapper.VenueMapper;
 import com.example.eventify.model.Venue;
 import com.example.eventify.repository.VenueRepository;
 import org.springframework.stereotype.Service;
@@ -16,6 +21,7 @@ import java.util.Optional;
  * 
  * Key Features:
  * - Comprehensive venue CRUD operations with validation
+ * - DTO-based API: accepts VenueCreateDTO, returns VenueResponseDTO
  * - Search methods for city and name with case-insensitive matching
  * - Transaction management for data consistency
  * - Comprehensive logging for audit trail and observability
@@ -23,13 +29,14 @@ import java.util.Optional;
 @Service
 @Transactional
 public class VenueService {
-
     private static final Logger logger = LoggerFactory.getLogger(VenueService.class);
-
+    
     private final VenueRepository venueRepository;
+    private final VenueMapper venueMapper;
 
-    public VenueService(VenueRepository venueRepository) {
+    public VenueService(VenueRepository venueRepository, VenueMapper venueMapper) {
         this.venueRepository = venueRepository;
+        this.venueMapper = venueMapper;
     }
 
     /**
@@ -43,47 +50,45 @@ public class VenueService {
     }
 
     /**
-     * Create a new venue with comprehensive validation.
-     * All fields except description are mandatory.
+     * Create a new venue from VenueCreateDTO with comprehensive validation.
+     * All fields are mandatory. Returns VenueResponseDTO.
      * 
-     * @param venue Venue entity to persist
-     * @return Persisted Venue with assigned ID
-     * @throws InvalidVenueException if validation fails
+     * @param venueCreateDTO DTO with venue creation data
+     * @return VenueResponseDTO with created venue details
+     * @throws BusinessRuleViolationException if validation fails
      */
-    public Venue crear(Venue venue) {
-        logger.info("Creating new venue: {}", venue.getNombre());
+    public VenueResponseDTO crear(VenueCreateDTO venueCreateDTO) {
+        logger.info("Creating new venue: {}", venueCreateDTO.getNombre());
 
-        if (venue == null || venue.getNombre() == null || venue.getNombre().isBlank()) {
-            throw new InvalidVenueException("El nombre del lugar es obligatorio");
+        // Check for existing venue with same name
+        Optional<Venue> existingVenue = venueRepository.findByNombreIgnoreCase(venueCreateDTO.getNombre());
+        if (existingVenue.isPresent()) {
+            throw new DuplicateResourceException(
+                "Venue",
+                "nombre",
+                venueCreateDTO.getNombre()
+            );
         }
 
-        if (venue.getCapacidad() == null || venue.getCapacidad() <= 0) {
-            throw new InvalidVenueException("La capacidad debe ser mayor que cero");
-        }
-
-        if (venue.getDireccion() == null || venue.getDireccion().isBlank()) {
-            throw new InvalidVenueException("La dirección del lugar es obligatoria");
-        }
-
-        if (venue.getCiudad() == null || venue.getCiudad().isBlank()) {
-            throw new InvalidVenueException("La ciudad del lugar es obligatoria");
-        }
+        // Convert DTO to entity
+        Venue venue = venueMapper.toEntity(venueCreateDTO);
 
         Venue savedVenue = venueRepository.save(venue);
         logger.info("Venue created successfully with ID: {}", savedVenue.getId());
 
-        return savedVenue;
+        return venueMapper.toResponseDTO(savedVenue);
     }
 
     /**
-     * Find venue by ID.
+     * Find venue by ID and return VenueResponseDTO.
      * 
      * @param id Venue ID
-     * @return Optional containing the Venue if found
+     * @return Optional containing VenueResponseDTO if found
      */
-    public Optional<Venue> obtenerPorId(Long id) {
+    public Optional<VenueResponseDTO> obtenerPorId(Long id) {
         logger.debug("Fetching venue by ID: {}", id);
-        return venueRepository.findById(id);
+        return venueRepository.findById(id)
+            .map(venueMapper::toResponseDTO);
     }
 
     /**
@@ -109,39 +114,40 @@ public class VenueService {
     }
 
     /**
-     * Update an existing venue.
+     * Update an existing venue from VenueCreateDTO.
      * 
      * @param id Venue ID to update
-     * @param venueActualizado Updated Venue data
-     * @return Updated Venue entity
-     * @throws InvalidVenueException if venue not found or validation fails
+     * @param venueCreateDTO Updated Venue data
+     * @return Updated VenueResponseDTO
+     * @throws ResourceNotFoundException if venue not found
      */
-    public Venue actualizar(Long id, Venue venueActualizado) {
+    public VenueResponseDTO actualizar(Long id, VenueCreateDTO venueCreateDTO) {
         logger.info("Updating venue with ID: {}", id);
-
+        
         Venue venue = venueRepository.findById(id)
-            .orElseThrow(() -> new InvalidVenueException("Lugar no encontrado con ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("Venue", "id", id));
 
-        if (venueActualizado.getNombre() != null && !venueActualizado.getNombre().isBlank()) {
-            venue.setNombre(venueActualizado.getNombre());
+        // Check if new name conflicts with another venue (excluding this one)
+        if (!venue.getNombre().equalsIgnoreCase(venueCreateDTO.getNombre())) {
+            Optional<Venue> existingVenue = venueRepository.findByNombreIgnoreCase(venueCreateDTO.getNombre());
+            if (existingVenue.isPresent()) {
+                throw new DuplicateResourceException(
+                    "Venue",
+                    "nombre",
+                    venueCreateDTO.getNombre()
+                );
+            }
         }
 
-        if (venueActualizado.getDireccion() != null && !venueActualizado.getDireccion().isBlank()) {
-            venue.setDireccion(venueActualizado.getDireccion());
-        }
-
-        if (venueActualizado.getCapacidad() != null && venueActualizado.getCapacidad() > 0) {
-            venue.setCapacidad(venueActualizado.getCapacidad());
-        }
-
-        if (venueActualizado.getCiudad() != null && !venueActualizado.getCiudad().isBlank()) {
-            venue.setCiudad(venueActualizado.getCiudad());
-        }
+        venue.setNombre(venueCreateDTO.getNombre());
+        venue.setDireccion(venueCreateDTO.getDireccion());
+        venue.setCapacidad(venueCreateDTO.getCapacidad());
+        venue.setCiudad(venueCreateDTO.getCiudad());
 
         Venue updated = venueRepository.save(venue);
         logger.info("Venue updated successfully: {}", id);
 
-        return updated;
+        return venueMapper.toResponseDTO(updated);
     }
 
     /**
@@ -149,15 +155,24 @@ public class VenueService {
      * Note: Deletion is restricted by foreign key constraints if events are linked.
      * 
      * @param id Venue ID to delete
-     * @throws InvalidVenueException if venue not found
+     * @throws ResourceNotFoundException if venue not found
+     * @throws BusinessRuleViolationException if venue has linked events
      */
     public void eliminar(Long id) {
         logger.info("Deleting venue with ID: {}", id);
-
+        
         Venue venue = venueRepository.findById(id)
-            .orElseThrow(() -> new InvalidVenueException("Lugar no encontrado con ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("Venue", "id", id));
 
-        venueRepository.delete(venue);
-        logger.info("Venue deleted successfully: {}", id);
+        try {
+            venueRepository.delete(venue);
+            logger.info("Venue deleted successfully: {}", id);
+        } catch (Exception e) {
+            logger.error("Error deleting venue: {}", id, e);
+            throw new BusinessRuleViolationException(
+                "No se puede eliminar el lugar porque tiene eventos vinculados",
+                "VENUE_HAS_EVENTS"
+            );
+        }
     }
 }

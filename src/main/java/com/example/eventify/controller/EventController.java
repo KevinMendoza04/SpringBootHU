@@ -1,7 +1,8 @@
 package com.example.eventify.controller;
 
+import com.example.eventify.dto.EventCreateDTO;
+import com.example.eventify.dto.EventResponseDTO;
 import com.example.eventify.dto.EventSummaryDTO;
-import com.example.eventify.model.Event;
 import com.example.eventify.service.EventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -17,23 +19,24 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
-
 /**
  * EventController - REST API for event management with advanced search and filtering.
  * 
  * Features:
  * - Paginated event listings using Slice (no total count required)
+ * - DTO-based API: EventCreateDTO for input, EventResponseDTO for output
+ * - EventSummaryDTO for efficient catalog display (maintains week 4 optimization)
  * - Advanced search filters: city, category, date range, venue capacity
- * - EventSummaryDTO projections for efficient catalog display
  * - Soft delete operations with logical deletion preservation
- * - Comprehensive Swagger/OpenAPI documentation
+ * - Comprehensive Swagger/OpenAPI documentation with RFC 7807 error handling
  */
-@Tag(name = "Eventos", description = "Operaciones avanzadas de consulta, creación y gestión de eventos con filtrado inteligente y soft delete")
+@Tag(
+    name = "Events",
+    description = "Advanced event management with filtering, search, and DTO-based API design"
+)
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
-
     private final EventService eventService;
 
     public EventController(EventService eventService) {
@@ -50,17 +53,17 @@ public class EventController {
      */
     @GetMapping
     @Operation(
-        summary = "Listar eventos con paginación",
-        description = "Recupera eventos activos ordenados por fecha descendente. Utiliza Slice para optimizar queries en catálogos masivos sin contar registros totales."
+        summary = "List events with pagination",
+        description = "Retrieves active events ordered by date descending. Uses Slice for optimized queries on massive catalogs without counting total records."
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Slice de eventos recuperado exitosamente"),
-        @ApiResponse(responseCode = "400", description = "Parámetros de paginación inválidos")
+        @ApiResponse(responseCode = "200", description = "Slice of events retrieved successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid pagination parameters")
     })
-    public ResponseEntity<Slice<Event>> listar(
-        @Parameter(description = "Número de página (0-indexed)", example = "0")
+    public ResponseEntity<Slice<?>> listar(
+        @Parameter(description = "Page number (0-indexed)", example = "0")
         @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "Tamaño de página", example = "20")
+        @Parameter(description = "Page size", example = "20")
         @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size);
@@ -70,6 +73,7 @@ public class EventController {
     /**
      * List event summaries (lightweight projections) for efficient catalog display.
      * Recommended for UI listing pages with many records.
+     * MAINTAINS the Record EventSummaryDTO strategy from week 4 for optimization.
      * 
      * @param page Page number (0-indexed)
      * @param size Page size
@@ -77,14 +81,14 @@ public class EventController {
      */
     @GetMapping("/summaries")
     @Operation(
-        summary = "Listar resúmenes de eventos",
-        description = "Recupera proyecciones ligeras de eventos (EventSummaryDTO) para catálogos masivos. Denormaliza información del venue y categorías sin cargar entidades completas."
+        summary = "List event summaries",
+        description = "Retrieves lightweight Event projections (EventSummaryDTO) for massive catalogs. Denormalizes venue and category information without loading full entities."
     )
-    @ApiResponse(responseCode = "200", description = "Slice de resúmenes de eventos recuperado")
+    @ApiResponse(responseCode = "200", description = "Slice of event summaries retrieved")
     public ResponseEntity<Slice<EventSummaryDTO>> listarResumenes(
-        @Parameter(description = "Número de página (0-indexed)", example = "0")
+        @Parameter(description = "Page number (0-indexed)", example = "0")
         @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "Tamaño de página", example = "20")
+        @Parameter(description = "Page size", example = "20")
         @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size);
@@ -100,18 +104,18 @@ public class EventController {
      * @param size Page size
      * @return Filtered event summaries
      */
-    @GetMapping("/buscar/ciudad")
+    @GetMapping("/search/city")
     @Operation(
-        summary = "Buscar eventos por ciudad",
-        description = "Filtra eventos por ciudad con búsqueda insensible a mayúsculas y parcial. Utiliza proyecciones optimizadas (EventSummaryDTO)."
+        summary = "Search events by city",
+        description = "Filters events by city with case-insensitive and partial matching. Uses optimized projections (EventSummaryDTO)."
     )
-    @ApiResponse(responseCode = "200", description = "Eventos de la ciudad recuperados")
+    @ApiResponse(responseCode = "200", description = "Events from the city retrieved")
     public ResponseEntity<Slice<EventSummaryDTO>> buscarPorCiudad(
-        @Parameter(description = "Nombre de la ciudad (búsqueda parcial e insensible a mayúsculas)", example = "bogotá")
+        @Parameter(description = "City name (partial and case-insensitive search)", example = "bogotá")
         @RequestParam String ciudad,
-        @Parameter(description = "Número de página", example = "0")
+        @Parameter(description = "Page number", example = "0")
         @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "Tamaño de página", example = "20")
+        @Parameter(description = "Page size", example = "20")
         @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size);
@@ -127,18 +131,18 @@ public class EventController {
      * @param size Page size
      * @return Filtered event summaries
      */
-    @GetMapping("/buscar/categoria")
+    @GetMapping("/search/category")
     @Operation(
-        summary = "Buscar eventos por categoría",
-        description = "Filtra eventos por categoría asociada con búsqueda insensible a mayúsculas y parcial."
+        summary = "Search events by category",
+        description = "Filters events by associated category with case-insensitive and partial matching."
     )
-    @ApiResponse(responseCode = "200", description = "Eventos de la categoría recuperados")
+    @ApiResponse(responseCode = "200", description = "Events from the category retrieved")
     public ResponseEntity<Slice<EventSummaryDTO>> buscarPorCategoria(
-        @Parameter(description = "Nombre de la categoría (búsqueda parcial e insensible a mayúsculas)", example = "conciertos")
+        @Parameter(description = "Category name (partial and case-insensitive search)", example = "concerts")
         @RequestParam String categoria,
-        @Parameter(description = "Número de página", example = "0")
+        @Parameter(description = "Page number", example = "0")
         @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "Tamaño de página", example = "20")
+        @Parameter(description = "Page size", example = "20")
         @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size);
@@ -155,20 +159,20 @@ public class EventController {
      * @param size Page size
      * @return Filtered event summaries
      */
-    @GetMapping("/buscar/ciudad-categoria")
+    @GetMapping("/search/city-category")
     @Operation(
-        summary = "Buscar eventos por ciudad y categoría",
-        description = "Filtra eventos combinando criterios de ciudad y categoría (lógica AND). Single query optimization sin problemas N+1."
+        summary = "Search events by city and category",
+        description = "Filters events combining city and category criteria (AND logic). Single query optimization without N+1 problems."
     )
-    @ApiResponse(responseCode = "200", description = "Eventos filtrados por ambos criterios")
+    @ApiResponse(responseCode = "200", description = "Events filtered by both criteria")
     public ResponseEntity<Slice<EventSummaryDTO>> buscarPorCiudadYCategoria(
-        @Parameter(description = "Nombre de la ciudad", example = "bogotá")
+        @Parameter(description = "City name", example = "bogotá")
         @RequestParam String ciudad,
-        @Parameter(description = "Nombre de la categoría", example = "conciertos")
+        @Parameter(description = "Category name", example = "concerts")
         @RequestParam String categoria,
-        @Parameter(description = "Número de página", example = "0")
+        @Parameter(description = "Page number", example = "0")
         @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "Tamaño de página", example = "20")
+        @Parameter(description = "Page size", example = "20")
         @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size);
@@ -177,23 +181,63 @@ public class EventController {
 
     /**
      * Create a new event with mandatory venue and optional categories.
-     * Event is created in active state (is_active=true) by default.
+     * Accepts EventCreateDTO with comprehensive validation.
+     * Returns EventResponseDTO with denormalized venue and category information.
      * 
-     * @param event Event object with venue (required)
-     * @return Created Event with assigned ID
+     * @param eventCreateDTO Event creation request DTO with validation
+     * @return EventResponseDTO with created event details
      */
     @PostMapping
     @Operation(
-        summary = "Crear evento",
-        description = "Crea un nuevo evento con venue obligatorio. El evento se crea en estado activo. Las categorías se pueden asignar posteriormente."
+        summary = "Create event",
+        description = "Creates a new event with mandatory venue. Accepts EventCreateDTO with validation. Returns EventResponseDTO with safe denormalization."
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "201", description = "Evento creado exitosamente", content = @Content(schema = @Schema(implementation = Event.class))),
-        @ApiResponse(responseCode = "400", description = "Datos de evento inválidos o venue no especificado")
+        @ApiResponse(
+            responseCode = "201",
+            description = "Event created successfully",
+            content = @Content(schema = @Schema(implementation = EventResponseDTO.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Validation error - see error details for field-level validation messages"
+        ),
+        @ApiResponse(responseCode = "404", description = "Venue or Category not found")
     })
-    public ResponseEntity<Event> crear(@RequestBody Event event) {
-        Event eventoCreado = eventService.crear(event);
-        return ResponseEntity.status(HttpStatus.CREATED).body(eventoCreado);
+    public ResponseEntity<EventResponseDTO> crear(
+        @Valid @RequestBody EventCreateDTO eventCreateDTO
+    ) {
+        EventResponseDTO createdEvent = eventService.crear(eventCreateDTO);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdEvent);
+    }
+
+    /**
+     * Retrieve detailed information about a specific event.
+     * Returns EventResponseDTO with denormalized information.
+     * 
+     * @param id Event ID
+     * @return EventResponseDTO with event details
+     */
+    @GetMapping("/{id}")
+    @Operation(
+        summary = "Get event details",
+        description = "Retrieves complete event information including venue and categories. Returns EventResponseDTO with denormalized data."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Event found",
+            content = @Content(schema = @Schema(implementation = EventResponseDTO.class))
+        ),
+        @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    public ResponseEntity<EventResponseDTO> obtenerPorId(
+        @Parameter(description = "Event ID", example = "1")
+        @PathVariable Long id
+    ) {
+        return eventService.obtenerPorId(id)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**
@@ -206,42 +250,18 @@ public class EventController {
      */
     @DeleteMapping("/{id}")
     @Operation(
-        summary = "Eliminar evento (soft delete)",
-        description = "Realiza un borrado lógico del evento. El registro persiste en BD pero marcado como inactivo (is_active=false). Automáticamente excluido de todas las consultas por @SQLRestriction."
+        summary = "Delete event (soft delete)",
+        description = "Performs a logical deletion of the event. Record persists in DB but marked inactive. Automatically excluded from all queries via @SQLRestriction."
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "204", description = "Evento eliminado (soft delete) exitosamente"),
-        @ApiResponse(responseCode = "404", description = "Evento no encontrado")
+        @ApiResponse(responseCode = "204", description = "Event soft deleted successfully"),
+        @ApiResponse(responseCode = "404", description = "Event not found")
     })
     public ResponseEntity<Void> eliminarSoft(
-        @Parameter(description = "ID del evento a eliminar", example = "1")
+        @Parameter(description = "Event ID to delete", example = "1")
         @PathVariable Long id
     ) {
         eventService.softDeletear(id);
         return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Retrieve detailed information about a specific event.
-     * 
-     * @param id Event ID
-     * @return Event details with venue and categories loaded
-     */
-    @GetMapping("/{id}")
-    @Operation(
-        summary = "Obtener detalles de un evento",
-        description = "Recupera la información completa de un evento incluyendo venue y categorías asociadas."
-    )
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Evento encontrado"),
-        @ApiResponse(responseCode = "404", description = "Evento no encontrado")
-    })
-    public ResponseEntity<Event> obtenerPorId(
-        @Parameter(description = "ID del evento", example = "1")
-        @PathVariable Long id
-    ) {
-        return eventService.obtenerPorId(id)
-            .map(ResponseEntity::ok)
-            .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }
