@@ -79,7 +79,8 @@ public class EventService {
      */
     public Slice<EventSummaryDTO> listarEventosSummary(Pageable pageable) {
         logger.debug("Fetching event summaries with pagination: {}", pageable);
-        return eventRepository.findAllEventSummaries(pageable);
+        return eventRepository.findByIsActiveTrueOrderByFechaDesc(pageable)
+            .map(this::toSummaryDTO);
     }
 
     /**
@@ -91,7 +92,8 @@ public class EventService {
      */
     public Slice<EventSummaryDTO> buscarPorCiudad(String ciudad, Pageable pageable) {
         logger.debug("Searching events by city: {} with pagination: {}", ciudad, pageable);
-        return eventRepository.findEventSummariesByCity(ciudad, pageable);
+        return eventRepository.findByVenueCiudadIgnoreCaseContainingOrderByFechaDesc(ciudad, pageable)
+            .map(this::toSummaryDTO);
     }
 
     /**
@@ -103,7 +105,8 @@ public class EventService {
      */
     public Slice<EventSummaryDTO> buscarPorCategoria(String categoryName, Pageable pageable) {
         logger.debug("Searching events by category: {} with pagination: {}", categoryName, pageable);
-        return eventRepository.findEventSummariesByCategory(categoryName, pageable);
+        return eventRepository.findDistinctByCategoriesNombreIgnoreCaseContainingOrderByFechaDesc(categoryName, pageable)
+            .map(this::toSummaryDTO);
     }
 
     /**
@@ -117,7 +120,10 @@ public class EventService {
      */
     public Slice<EventSummaryDTO> buscarPorCiudadYCategoria(String ciudad, String categoryName, Pageable pageable) {
         logger.debug("Searching events by city: {} and category: {} with pagination: {}", ciudad, categoryName, pageable);
-        return eventRepository.findEventSummariesByCityAndCategory(ciudad, categoryName, pageable);
+        return eventRepository
+            .findDistinctByVenueCiudadIgnoreCaseContainingAndCategoriesNombreIgnoreCaseContainingOrderByFechaDesc(
+                ciudad, categoryName, pageable)
+            .map(this::toSummaryDTO);
     }
 
     /**
@@ -130,13 +136,16 @@ public class EventService {
      * @throws BusinessRuleViolationException if validation fails
      */
     public EventResponseDTO crear(EventCreateDTO eventCreateDTO) {
+        if (eventCreateDTO == null) {
+            throw new BusinessRuleViolationException(
+                "Los datos del evento son obligatorios",
+                "EVENT_REQUIRED"
+            );
+        }
+
         logger.info("Creating new event: {}", eventCreateDTO.getNombre());
 
-        // Convert DTO to entity
-        Event event = eventMapper.toEntity(eventCreateDTO);
-        event.setIsActive(true);
-
-        // Load and validate venue
+        // Validate and load the mandatory venue before mapping the event.
         if (eventCreateDTO.getVenueId() == null || eventCreateDTO.getVenueId() <= 0) {
             throw new BusinessRuleViolationException(
                 "El lugar (venue) es obligatorio para crear un evento",
@@ -151,6 +160,14 @@ public class EventService {
                 eventCreateDTO.getVenueId()
             ));
 
+        Event event = eventMapper.toEntity(eventCreateDTO);
+        if (event == null) {
+            throw new BusinessRuleViolationException(
+                "No se pudo crear el evento a partir de los datos proporcionados",
+                "EVENT_MAPPING_FAILED"
+            );
+        }
+        event.setIsActive(true);
         event.setVenue(venue);
 
         // Load and assign categories if provided
@@ -166,6 +183,22 @@ public class EventService {
         logger.info("Event created successfully with ID: {}", savedEvent.getId());
 
         return eventMapper.toResponseDTO(savedEvent);
+    }
+
+    private EventSummaryDTO toSummaryDTO(Event event) {
+        Set<String> categoryNames = event.getCategories().stream()
+            .map(Category::getNombre)
+            .collect(Collectors.toSet());
+
+        return new EventSummaryDTO(
+            event.getId(),
+            event.getNombre(),
+            event.getFecha(),
+            event.getDescripcion(),
+            event.getVenue().getNombre(),
+            event.getVenue().getCiudad(),
+            categoryNames
+        );
     }
 
     /**
